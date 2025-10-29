@@ -1,119 +1,93 @@
 title: iPerf
 subtitle: Perform real-time network throughput measurements while using iPerf3
-github_actions_url: https://github.com/skupperproject/skupper-example-iperf/actions/workflows/main.yaml
 overview: |
   This tutorial demonstrates how to perform real-time network throughput measurements across Kubernetes 
   using the iperf3 tool.
   In this tutorial you:
-  * deploy iperf3 in three separate clusters
+  * deploy iperf3 in two separate clusters
   * run iperf3 client test instances
 prerequisites: |
   * The `kubectl` command-line tool, version 1.15 or later
   ([installation guide][install-kubectl])
   
-  * Access to three clusters to observe performance. 
-  As an example, the three clusters might consist of:
+  * Access to two clusters to observe performance. 
+  As an example, the two clusters might consist of:
   
-  * A private cloud cluster running on your local machine (**private1**)
-  * Two public cloud clusters running in public cloud providers (**public1** and **public2**)
+  * A private cloud cluster running on your local machine (**east**)
+  * A public cloud cluster running in a public cloud provider (**west**)
 sites:
-  public1:
+  west:
     platform: kubernetes
-    namespace: public1
+    namespace: west
     env:
-      KUBECONFIG: ~/.kube/config-public1
-  public2:
+      KUBECONFIG: ~/.kube/config-west
+  east:
     platform: kubernetes
-    namespace: public2
+    namespace: east
     env:
-      KUBECONFIG: ~/.kube/config-public2
-  private1:
-    platform: kubernetes
-    namespace: private1
-    env:
-      KUBECONFIG: ~/.kube/config-private1
+      KUBECONFIG: ~/.kube/config-east
 steps:
-  - standard: install_the_skupper_command_line_tool
-  - standard: configure_separate_console_sessions
-  - standard: access_your_clusters
-  - standard: set_up_your_namespaces
-  - standard: install_skupper_in_your_namespaces
-  - standard: check_the_status_of_your_namespaces
-  - standard: link_your_namespaces
+  - standard: platform/access_your_kubernetes_clusters
+  - standard: platform/create_your_kubernetes_namespaces
+  - standard: platform/install_skupper_on_your_kubernetes_clusters
+  - standard: platform/install_the_skupper_command_line_tool
+  - standard: skupper/create_your_sites/kubernetes_cli
+  - standard: skupper/link_your_sites/kubernetes_cli
     commands:
-      "public1":
-        - run: skupper token create ~/private1-to-public1-token.yaml
-        - run: skupper token create ~/public2-to-public1-token.yaml
-      "public2":
-        - run: skupper token create ~/private1-to-public2-token.yaml
-        - run: skupper link create ~/public2-to-public1-token.yaml
-        - run: skupper link status --wait 60
-      "private1":
-        - run: skupper link create ~/private1-to-public1-token.yaml
-        - run: skupper link create ~/private1-to-public2-token.yaml
-        - run: skupper link status --wait 60
+      west:
+        - run: skupper token issue ~/east-to-west.token
+      east:
+        - run: skupper token redeem ~/east-to-west.token
   - title: Deploy the iperf3 servers
     preamble: |
       After creating the application router network, deploy `iperf3` in each namespace.
     commands:
-      "private1":
+      east:
         - run: kubectl apply -f deployment-iperf3-a.yaml
-      "public1":
+      west:
         - run: kubectl apply -f deployment-iperf3-b.yaml
-      "public2":
-        - run: kubectl apply -f deployment-iperf3-c.yaml
-  - title: Expose iperf3 from each namespace
+  - title: Create connectors for the iperf3 servers
     preamble: |
-      We have established connectivity between the namespaces and deployed `iperf3`.
-      Before we can test performance, we need access to the `iperf3` from each namespace.
+      With Skupper v2, connectors run in the namespace where the workload is deployed.
+      Create a connector for each iperf3 server so the application network can reach the pods.
     commands:
-      "private1":
+      east:
         - await_resource: deployment/iperf3-server-a
-        - run: skupper expose deployment/iperf3-server-a --port 5201
-        - await_resource: service/iperf3-server-a
-        - run: skupper service status
-          apply: test
-      "public1":
+        - run: skupper connector create iperf3-server-a 5201 --workload deployment/iperf3-server-a 
+      west:
         - await_resource: deployment/iperf3-server-b
-        - run: skupper expose deployment/iperf3-server-b --port 5201
-        - await_resource: service/iperf3-server-b
-        - run: skupper service status
-          apply: test
-      "public2":
-        - await_resource: deployment/iperf3-server-c
-        - run: skupper expose deployment/iperf3-server-c --port 5201
-        - await_resource: service/iperf3-server-c
-        - run: skupper service status
-          apply: test
+        - run: skupper connector create iperf3-server-b 5201 --workload deployment/iperf3-server-b 
+  - title: Create listeners for the iperf3 services
+    preamble: |
+      Listeners create service endpoints in each namespace so clients can reach those connectors.
+      Configure listeners for every iperf3 service in each namespace.
+    commands:
+      east:
+        - run: skupper listener create iperf3-server-a 5201
+        - run: skupper listener create iperf3-server-b 5201
+      west:
+        - run: skupper listener create iperf3-server-a 5201
+        - run: skupper listener create iperf3-server-b 5201
   - title: Run benchmark tests across the clusters
     preamble: |
       After deploying the iperf3 servers into the private and public cloud clusters,
       the virtual application network enables communications even though they are 
       running in separate clusters.
     commands:
-      "private1":
-        - run: kubectl exec $(kubectl get pod -l application=iperf3-server-a -o=jsonpath='{.items[0].metadata.name}') -- iperf3 -c iperf3-server-a
-        - run: kubectl exec $(kubectl get pod -l application=iperf3-server-a -o=jsonpath='{.items[0].metadata.name}') -- iperf3 -c iperf3-server-b
-        - run: kubectl exec $(kubectl get pod -l application=iperf3-server-a -o=jsonpath='{.items[0].metadata.name}') -- iperf3 -c iperf3-server-c
-      "public1":
-        - run: kubectl exec $(kubectl get pod -l application=iperf3-server-b -o=jsonpath='{.items[0].metadata.name}') -- iperf3 -c iperf3-server-a
-        - run: kubectl exec $(kubectl get pod -l application=iperf3-server-b -o=jsonpath='{.items[0].metadata.name}') -- iperf3 -c iperf3-server-b
-        - run: kubectl exec $(kubectl get pod -l application=iperf3-server-b -o=jsonpath='{.items[0].metadata.name}') -- iperf3 -c iperf3-server-c
-      "public2":
-        - run: kubectl exec $(kubectl get pod -l application=iperf3-server-c -o=jsonpath='{.items[0].metadata.name}') -- iperf3 -c iperf3-server-a
-        - run: kubectl exec $(kubectl get pod -l application=iperf3-server-c -o=jsonpath='{.items[0].metadata.name}') -- iperf3 -c iperf3-server-b
-        - run: kubectl exec $(kubectl get pod -l application=iperf3-server-c -o=jsonpath='{.items[0].metadata.name}') -- iperf3 -c iperf3-server-c
-  - standard: accessing_the_web_console
-  - standard: cleaning_up
+      east:
+        - run: kubectl exec $(kubectl get pod -l application=iperf3-server-a -o=jsonpath='{.items[0].metadata.name}') -- iperf3 -c iperf3-server-a > results/east-to-a.log
+        - run: kubectl exec $(kubectl get pod -l application=iperf3-server-a -o=jsonpath='{.items[0].metadata.name}') -- iperf3 -c iperf3-server-b > results/east-to-b.log
+      west:
+        - run: kubectl exec $(kubectl get pod -l application=iperf3-server-b -o=jsonpath='{.items[0].metadata.name}') -- iperf3 -c iperf3-server-a > results/west-to-a.log
+        - run: kubectl exec $(kubectl get pod -l application=iperf3-server-b -o=jsonpath='{.items[0].metadata.name}') -- iperf3 -c iperf3-server-b > results/west-to-b.log
+        - run: skupper debug dump
+  - standard: skupper/cleaning_up/kubernetes_cli
     commands:
-      private1:
+      east:
         - run: kubectl delete deployment iperf3-server-a
         - run: skupper delete
-      public1:
+      west:
         - run: kubectl delete deployment iperf3-server-b
-        - run: skupper delete
-      public2:
-        - run: kubectl delete deployment iperf3-server-c
         - run: skupper delete
 next_steps: |
   - [Find more examples](https://skupper.io/examples/)

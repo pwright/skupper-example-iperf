@@ -1,5 +1,2 @@
 /README.html
 __pycache__/
-*.log
-*.tar.gz
-results/
