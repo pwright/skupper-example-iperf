@@ -2,7 +2,7 @@
 
 # iPerf
 
-[![main](https://github.com/pwright/skupper-example-hello-world/actions/workflows/main.yaml/badge.svg)](https://github.com/pwright/skupper-example-hello-world/actions/workflows/main.yaml)
+[![main](https://github.com/pwright/skupper-example-iperf/actions/workflows/main.yaml/badge.svg)](https://github.com/pwright/skupper-example-iperf/actions/workflows/main.yaml)
 
 #### Perform real-time network throughput measurements while using iPerf3
 
@@ -296,15 +296,16 @@ running in separate clusters.
 _**East:**_
 
 ~~~ shell
-kubectl exec $(kubectl get pod -l application=iperf3-server-a -o=jsonpath='{.items[0].metadata.name}') -- iperf3 -c iperf3-server-a > results/east-to-a.txt
-kubectl exec $(kubectl get pod -l application=iperf3-server-a -o=jsonpath='{.items[0].metadata.name}') -- iperf3 -c iperf3-server-b > results/east-to-b.txt
+kubectl exec $(kubectl get pod -l application=iperf3-server-a -o=jsonpath='{.items[0].metadata.name}') -- iperf3 -c iperf3-server-a > results/east-to-a.log
+kubectl exec $(kubectl get pod -l application=iperf3-server-a -o=jsonpath='{.items[0].metadata.name}') -- iperf3 -c iperf3-server-b > results/east-to-b.log
 ~~~
 
 _**West:**_
 
 ~~~ shell
-kubectl exec $(kubectl get pod -l application=iperf3-server-b -o=jsonpath='{.items[0].metadata.name}') -- iperf3 -c iperf3-server-a > results/west-to-a.txt
-kubectl exec $(kubectl get pod -l application=iperf3-server-b -o=jsonpath='{.items[0].metadata.name}') -- iperf3 -c iperf3-server-b > results/west-to-b.txt
+kubectl exec $(kubectl get pod -l application=iperf3-server-b -o=jsonpath='{.items[0].metadata.name}') -- iperf3 -c iperf3-server-a > results/west-to-a.log
+kubectl exec $(kubectl get pod -l application=iperf3-server-b -o=jsonpath='{.items[0].metadata.name}') -- iperf3 -c iperf3-server-b > results/west-to-b.log
+skupper debug dump
 ~~~
 
 ## Cleaning up
